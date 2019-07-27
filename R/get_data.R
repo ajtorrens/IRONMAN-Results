@@ -3,6 +3,8 @@
 #' @importFrom rvest html_node html_table
 #' @importFrom xml2 read_html
 .getTablePage <- function(race, year, page) {
+    
+    race <- tolower(race)
     url <- paste0("http://eu.ironman.com/triathlon/coverage/athlete-tracker.aspx?",
                   "race=", race,
                   "&y=",   year, 
@@ -20,6 +22,8 @@
 #' @importFrom stringr str_extract_all str_remove
 #' @import magrittr
 .getNumPages <- function(race, year) {
+    
+    race <- tolower(race)
     
     url <- paste0("http://eu.ironman.com/triathlon/coverage/athlete-tracker.aspx?",
                   "race=", race,
@@ -68,7 +72,7 @@
     
 }
 
-#' @importFrom dplyr bind_rows as_tibble arrange
+#' @importFrom dplyr bind_rows as_tibble arrange mutate rename
 #' @importFrom lubridate hms as.period
 #' @importFrom pbapply pblapply
 #' @export
@@ -76,7 +80,9 @@ getResultsTable <- function(race, year) {
     
     n_pages <- .getNumPages(race, year)
     
-    full_tab <- pbapply::pblapply(seq_len(n_pages), .getTablePage, race = race, year = year) %>%
+    full_tab <- pbapply::pblapply(seq_len(n_pages), .getTablePage, 
+                                  race = race, year = year,
+                                  cl = 4) %>%
         dplyr::bind_rows() %>%
         as_tibble() %>%
         mutate(Status = ifelse(grepl("^[0-9]", Finish), yes = "FINISHED", no = Finish),
@@ -89,7 +95,10 @@ getResultsTable <- function(race, year) {
             mutate(Swim = as.period(hms(Swim)), 
                    Bike = as.period(hms(Bike)),
                    Run = as.period(hms(Run)), 
-                   Finish = as.period(hms(Finish))) 
+                   Finish = as.period(hms(Finish))) %>%
+            rename(DivRank = `Div Rank`,
+                   GenderRank = `Gender Rank`,
+                   OveralRank = `Overall Rank`)
     )
     
     full_tab <- .classifyDNF(full_tab) %>%
